@@ -204,18 +204,6 @@ Java_info_cemu_cemu_nativeinterface_NativeEmulation_initializeEmulation([[maybe_
 	ActiveSettings::Init();
 	LatteOverlay_init();
 	CemuCommonInit();
-
-	// Diagnostic build: force on verbose FS / save / patches / API-error
-	// logging so we can identify which Cafe HLE call is returning unexpected
-	// data right before Color Splash's deterministic SIGSEGV. Runs after
-	// CemuCommonInit which loads the config, so this overrides whatever
-	// log_flag was persisted.
-	uint64 diagLogFlags = GetConfig().log_flag.GetValue()
-	                    | (1ULL << static_cast<uint32>(LogType::CoreinitFile))
-	                    | (1ULL << static_cast<uint32>(LogType::Save))
-	                    | (1ULL << static_cast<uint32>(LogType::Patches))
-	                    | (1ULL << static_cast<uint32>(LogType::APIErrors));
-	cemuLog_setActiveLoggingFlags(diagLogFlags);
 }
 
 extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
