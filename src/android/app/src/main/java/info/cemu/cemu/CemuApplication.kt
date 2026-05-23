@@ -90,31 +90,21 @@ class CemuApplication : Application() {
             }
         }
 
-        // Patterns of assets to extract. The destination depends on the prefix:
-        //   graphicPacks/* → UserDataPath/graphicPacks/   (so GraphicPack2::LoadAll finds them)
-        //   everything else → DataPath/                   (gameProfiles, resources, …)
         val filePatterns = arrayOf(
             Pattern.compile("gameProfiles/.*"),
             Pattern.compile("resources/.*"),
-            Pattern.compile("graphicPacks/.*"),
         )
 
         fun isFileValid(file: String): Boolean {
             return filePatterns.any { pattern -> pattern.matcher(file).matches() }
         }
 
-        val userFolder = File(internalCemuUserFolder)
-
         for (assetFile in traverseAssets()) {
             if (!isFileValid(assetFile)) {
                 continue
             }
 
-            // Graphic packs are user-data (Cemu loads them from UserDataPath,
-            // not DataPath). Extract them there directly so the Graphic Packs
-            // UI sees them on first launch without an extra C++ search path.
-            val destRoot = if (assetFile.startsWith("graphicPacks/")) userFolder else dataFolder
-            val outFile = destRoot.resolve(assetFile)
+            val outFile = dataFolder.resolve(assetFile)
             outFile.parentFile?.mkdirs()
             assets.open(assetFile)
                 .use { asset -> outFile.outputStream().use { out -> asset.copyTo(out) } }
