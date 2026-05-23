@@ -2835,6 +2835,10 @@ void VulkanRenderer::GetTextureFormatInfoVK(Latte::E_GX2SURFFMT format, bool isD
 			// used by Color Splash and Resident Evil
 			formatInfoOut->vkImageFormat = VK_FORMAT_R8G8B8A8_UINT; // todo - should we use ABGR format?
 			formatInfoOut->decoder = TextureDecoder_X24_G8_UINT::getInstance(); // todo - verify
+			break; // missing break caused fallthrough into R32_X8_FLOAT, overwriting
+			       // both the format and the decoder. On stricter Vulkan drivers
+			       // (notably Adreno) this could surface as a hard format-mismatch
+			       // crash rather than silent miscoloring.
 		case Latte::E_GX2SURFFMT::R32_X8_FLOAT:
 			// seen in Disney Infinity 3.0
 			formatInfoOut->vkImageFormat = VK_FORMAT_R32_SFLOAT;
