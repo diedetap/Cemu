@@ -28,7 +28,7 @@ InputManager::InputManager()
 #if HAS_KEYBOARD
 	create_provider<KeyboardControllerProvider>();
 #endif
-#if HAS_SDL
+#ifdef HAS_SDL
 	create_provider<SDLControllerProvider>();
 #endif
 #if HAS_XINPUT
@@ -40,7 +40,7 @@ InputManager::InputManager()
 #if HAS_DSU
 	create_provider<DSUControllerProvider>();
 #endif
-#if HAS_GAMECUBE
+#if defined(HAS_GAMECUBE) && HAS_GAMECUBE && defined(HAS_LIBUSB)
 	create_provider<GameCubeControllerProvider>();
 #endif
 #if HAS_WIIMOTE
@@ -56,8 +56,7 @@ InputManager::InputManager()
 
 InputManager::~InputManager()
 {
-	m_update_thread_shutdown.store(true);
-	m_update_thread.join();
+	// destructors will not invoked forever, so we manually release resources in Shutdown().
 }
 
 bool s_input_config_window_has_focus = false;

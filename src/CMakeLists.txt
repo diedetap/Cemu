@@ -21,12 +21,14 @@ elseif(UNIX)
 	elseif(ANDROID)
 		add_compile_definitions(VK_USE_PLATFORM_ANDROID_KHR)
 	else()
-		add_compile_definitions(
-			VK_USE_PLATFORM_XLIB_KHR # legacy. Do we need to support XLIB surfaces?
-			VK_USE_PLATFORM_XCB_KHR
-		)
-		if (ENABLE_WAYLAND)
-			add_compile_definitions(VK_USE_PLATFORM_WAYLAND_KHR)
+		if (ENABLE_VULKAN)
+			add_compile_definitions(
+				VK_USE_PLATFORM_XLIB_KHR # legacy. Do we need to support XLIB surfaces?
+				VK_USE_PLATFORM_XCB_KHR
+			)
+			if (ENABLE_WAYLAND)
+				add_compile_definitions(VK_USE_PLATFORM_WAYLAND_KHR)
+			endif()
 		endif()
 	endif()
 	# warnings
@@ -37,9 +39,16 @@ elseif(UNIX)
     add_compile_options(-Wno-multichar -Wno-invalid-offsetof -Wno-switch -Wno-ignored-attributes -Wno-deprecated-enum-enum-conversion)
 endif()
 
-add_compile_definitions(VK_NO_PROTOTYPES)
-
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
+
+# on msvc we can reuse the PCH from CemuCommon, on other platforms it's not straight forward to reuse the PCH so we opt out of it
+function(cemu_use_precompiled_header target_name)
+	if(MSVC)
+		target_precompile_headers(${target_name} REUSE_FROM CemuCommon)
+	else()
+		target_precompile_headers(${target_name} PRIVATE "${CMAKE_SOURCE_DIR}/src/Common/precompiled.h")
+	endif()
+endfunction()
 
 add_subdirectory(Common)
 add_subdirectory(gui)
@@ -92,10 +101,10 @@ if (MACOS_BUNDLE)
 	set(MACOSX_BUNDLE_BUNDLE_NAME "Cemu")
 	set(MACOSX_BUNDLE_SHORT_VERSION_STRING "${EMULATOR_VERSION_MAJOR}.${EMULATOR_VERSION_MINOR}.${EMULATOR_VERSION_PATCH}")
 	set(MACOSX_BUNDLE_BUNDLE_VERSION "${EMULATOR_VERSION_MAJOR}.${EMULATOR_VERSION_MINOR}.${EMULATOR_VERSION_PATCH}")
-	set(MACOSX_BUNDLE_COPYRIGHT "Copyright © 2024 Cemu Project")
+	set(MACOSX_BUNDLE_COPYRIGHT "Copyright © ${CURRENT_YEAR} Cemu Project")
 
 	set(MACOSX_BUNDLE_CATEGORY "public.app-category.games")
- 	set(MACOSX_MINIMUM_SYSTEM_VERSION "12.0")
+ 	set(MACOSX_MINIMUM_SYSTEM_VERSION "13.4")
   	set(MACOSX_BUNDLE_TYPE_EXTENSION "wua")
 
 	set_target_properties(CemuBin PROPERTIES
@@ -106,29 +115,88 @@ if (MACOS_BUNDLE)
 	set(FOLDERS gameProfiles resources)
 	foreach(folder ${FOLDERS})
 		add_custom_command (TARGET CemuBin POST_BUILD
-			COMMAND ${CMAKE_COMMAND} ARGS -E copy_directory "${CMAKE_SOURCE_DIR}/bin/${folder}" "${CMAKE_SOURCE_DIR}/bin/${OUTPUT_NAME}.app/Contents/SharedSupport/${folder}")
+			COMMAND ${CMAKE_COMMAND} ARGS -E copy_directory "${CMAKE_SOURCE_DIR}/bin/${folder}" "$<TARGET_BUNDLE_DIR:CemuBin>/Contents/SharedSupport/${folder}")
 	endforeach(folder)
 
-	if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-	    set(LIBUSB_PATH "${CMAKE_BINARY_DIR}/vcpkg_installed/${VCPKG_TARGET_TRIPLET}/debug/lib/libusb-1.0.0.dylib")
-	else()
-	    set(LIBUSB_PATH "${CMAKE_BINARY_DIR}/vcpkg_installed/${VCPKG_TARGET_TRIPLET}/lib/libusb-1.0.0.dylib")
+	if (ENABLE_VULKAN)
+		if (EXISTS "/usr/local/lib/libMoltenVK.dylib")
+			set(MOLTENVK_PATH "/usr/local/lib/libMoltenVK.dylib")
+		elseif (EXISTS "/opt/homebrew/lib/libMoltenVK.dylib")
+			set(MOLTENVK_PATH "/opt/homebrew/lib/libMoltenVK.dylib")
+		else()
+			message(FATAL_ERROR "failed to find libMoltenVK.dylib")
+		endif ()
+  endif()
+  
+	if (ENABLE_LIBUSB)
+		if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+		    set(LIBUSB_PATH "${CMAKE_BINARY_DIR}/vcpkg_installed/${VCPKG_TARGET_TRIPLET}/debug/lib/libusb-1.0.0.dylib")
+		else()
+		    set(LIBUSB_PATH "${CMAKE_BINARY_DIR}/vcpkg_installed/${VCPKG_TARGET_TRIPLET}/lib/libusb-1.0.0.dylib")
+		endif()
 	endif()
 
-	if (EXISTS "/usr/local/lib/libMoltenVK.dylib")
-		set(MOLTENVK_PATH "/usr/local/lib/libMoltenVK.dylib")
-	elseif (EXISTS "/opt/homebrew/lib/libMoltenVK.dylib")
-		set(MOLTENVK_PATH "/opt/homebrew/lib/libMoltenVK.dylib")
-	else()
-		message(FATAL_ERROR "failed to find libMoltenVK.dylib")
-	endif ()
+	set(UPDATE_SH_PATH "${CMAKE_SOURCE_DIR}/src/resource/update.sh")
+	set(APP_BUNDLE_DIR "$<TARGET_BUNDLE_DIR:CemuBin>")
+	set(FRAMEWORKS_DIR "${APP_BUNDLE_DIR}/Contents/Frameworks")
+	set(RESOURCES_DIR  "${APP_BUNDLE_DIR}/Contents/Resources")
 
-	add_custom_command (TARGET CemuBin POST_BUILD
-		COMMAND ${CMAKE_COMMAND} ARGS -E copy "${MOLTENVK_PATH}" "${CMAKE_SOURCE_DIR}/bin/${OUTPUT_NAME}.app/Contents/Frameworks/libMoltenVK.dylib"
-		COMMAND ${CMAKE_COMMAND} ARGS -E copy "${LIBUSB_PATH}" "${CMAKE_SOURCE_DIR}/bin/${OUTPUT_NAME}.app/Contents/Frameworks/libusb-1.0.0.dylib"
-		COMMAND ${CMAKE_COMMAND} ARGS -E copy "${CMAKE_SOURCE_DIR}/src/resource/update.sh" "${CMAKE_SOURCE_DIR}/bin/${OUTPUT_NAME}.app/Contents/MacOS/update.sh"
-		COMMAND bash -c "install_name_tool -add_rpath @executable_path/../Frameworks ${CMAKE_SOURCE_DIR}/bin/${OUTPUT_NAME}.app/Contents/MacOS/${OUTPUT_NAME}"
-		COMMAND bash -c "install_name_tool -change ${LIBUSB_PATH} @executable_path/../Frameworks/libusb-1.0.0.dylib ${CMAKE_SOURCE_DIR}/bin/${OUTPUT_NAME}.app/Contents/MacOS/${OUTPUT_NAME}")
+	if (ENABLE_VULKAN)
+		add_custom_command(TARGET CemuBin POST_BUILD
+			COMMAND ${CMAKE_COMMAND} -E copy 
+				"${MOLTENVK_PATH}"
+				"${FRAMEWORKS_DIR}/libMoltenVK.dylib"
+		)
+	endif()
+
+	add_custom_command(TARGET CemuBin POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E copy
+			"${UPDATE_SH_PATH}"
+			"${RESOURCES_DIR}/update.sh"
+		COMMAND chmod 755
+			"${RESOURCES_DIR}/update.sh"
+	)
+
+	if (ENABLE_LIBUSB)
+		add_custom_command(TARGET CemuBin POST_BUILD
+			COMMAND ${CMAKE_COMMAND} -E copy
+				"${LIBUSB_PATH}"
+				"${FRAMEWORKS_DIR}/libusb-1.0.0.dylib"
+		)
+	endif()
+
+	set_target_properties(CemuBin PROPERTIES
+		BUILD_WITH_INSTALL_RPATH TRUE
+		INSTALL_RPATH "@executable_path/../Frameworks"
+	)
+
+	if (ENABLE_LIBUSB)
+		add_custom_command(TARGET CemuBin POST_BUILD
+		COMMAND install_name_tool
+			-change @rpath/libusb-1.0.0.dylib
+				@executable_path/../Frameworks/libusb-1.0.0.dylib
+				"$<TARGET_FILE:CemuBin>"
+		)
+	endif()
+else()
+    if(APPLE)
+		if (ENABLE_VULKAN)
+			find_library(MOLTENVK_LIBRARY
+				NAMES MoltenVK moltenvk libMoltenVK.dylib
+				PATHS /usr/local/lib /opt/homebrew/lib
+			)
+			if(MOLTENVK_LIBRARY)
+				message(STATUS "Found MoltenVK: ${MOLTENVK_LIBRARY}")
+				target_link_libraries(CemuBin PRIVATE ${MOLTENVK_LIBRARY})
+			else()
+				message(WARNING "libMoltenVK.dylib not found")
+			endif()
+			set_target_properties(CemuBin PROPERTIES
+				BUILD_WITH_INSTALL_RPATH TRUE
+				INSTALL_RPATH "/usr/local/lib;/opt/homebrew/lib"
+			)
+		endif()
+    endif()
 endif()
 
 set_target_properties(CemuBin PROPERTIES

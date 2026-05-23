@@ -112,8 +112,7 @@ void SymbolListCtrl::OnLeftDClick(wxListEvent& event)
 	const auto address = std::stoul(text.ToStdString(), nullptr, 16);
 	if (address == 0)
 		return;
-	debuggerState.debugSession.instructionPointer = address;
-	g_debuggerDispatcher.MoveIP();
+	debugger_jumpToAddressInDisasm(address);
 }
 
 void SymbolListCtrl::OnRightClick(wxListEvent& event)
@@ -141,9 +140,9 @@ void SymbolListCtrl::OnRightClick(wxListEvent& event)
 #endif
 }
 
-void SymbolListCtrl::ChangeListFilter(std::string filter)
+void SymbolListCtrl::ChangeListFilter(wxString filter)
 {
-	m_list_filter = wxString(filter).MakeLower();
+	m_list_filter = filter.MakeLower();
 
 	size_t visible_entries = m_data.size();
 	for (auto& [address, symbol] : m_data)

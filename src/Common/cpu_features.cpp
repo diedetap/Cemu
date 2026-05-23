@@ -1,5 +1,10 @@
 #include "cpu_features.h"
 
+#if BOOST_OS_MACOS
+#include <sys/types.h>
+#include <sys/sysctl.h>
+#endif
+
 // wrappers with uniform prototype for implementation-specific x86 CPU id
 #if defined(ARCH_X86_64)
 #ifdef __GNUC__

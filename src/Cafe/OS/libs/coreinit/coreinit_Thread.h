@@ -503,7 +503,9 @@ static_assert(sizeof(OSThread_t) == 0x6A0);
 
 namespace coreinit
 {
+	void MapThreadExports();
 	void InitializeThread();
+
 	void InitializeConcurrency();
 
 	void SuspendActiveThreads();
@@ -611,6 +613,7 @@ namespace coreinit
 	// scheduler
 	void OSSchedulerBegin(sint32 numCPUEmulationThreads);
 	void OSSchedulerEnd();
+	bool OSIsSchedulerActive();
 
 	// internal
 	void __OSAddReadyThreadToRunQueue(OSThread_t* thread);

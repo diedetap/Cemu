@@ -55,7 +55,9 @@ struct LatteFetchShader
 
 	void CalculateFetchShaderVkHash();
 
+#ifdef ENABLE_METAL
 	void CheckIfVerticesNeedManualFetchMtl(uint32* contextRegister);
+#endif
 
 	uint64 getVkPipelineHashFragment() const { return vkPipelineHashFragment; };
 
