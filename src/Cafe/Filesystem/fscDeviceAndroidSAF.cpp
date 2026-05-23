@@ -53,7 +53,12 @@ uint64 FSCVirtualFile_AndroidSAF::fscQueryValueU64(uint32 id)
 
 uint32 FSCVirtualFile_AndroidSAF::fscWriteData(void* buffer, uint32 size)
 {
-	throw std::logic_error("write not supported with SAF");
+	// SAF mounts (content://) are read-only. Some Wii U titles (notably
+	// Paper Mario: Color Splash) try to write to dbg files on boot. Throwing
+	// here propagates out of the FSA worker thread without a handler and
+	// terminates the process. Treat write attempts as a zero-byte write so
+	// the game gets a benign failure code and continues.
+	cemuLog_logOnce(LogType::Force, "AndroidSAF: write attempt on read-only mount ignored");
 	return 0;
 }
 
@@ -157,7 +162,19 @@ FSCVirtualFile* FSCVirtualFile_AndroidSAF::OpenFile(const fs::path& path, FSC_AC
 	if (HAS_FLAG(accessFlags, FSC_ACCESS_FLAG::WRITE_PERMISSION) ||
 		HAS_FLAG(accessFlags, FSC_ACCESS_FLAG::FILE_ALLOW_CREATE) ||
 		HAS_FLAG(accessFlags, FSC_ACCESS_FLAG::FILE_ALWAYS_CREATE))
-		throw std::logic_error("writing and creating a file is not supported with SAF");
+	{
+		// SAF (content://) mounts are read-only. Throwing here would
+		// unwind into the FSA worker thread and abort the process,
+		// which is what Paper Mario: Color Splash hits when it
+		// speculatively tries to open dbg/scenes/A_Boot.txt for write
+		// after the read attempt failed. Return a clean "file not found"
+		// so the game treats it as a normal absent file and moves on.
+		cemuLog_logOnce(LogType::Force,
+			"AndroidSAF: write/create open on read-only mount returned as FILE_NOT_FOUND ({})",
+			_pathToUtf8(path));
+		fscStatus = FSC_STATUS_FILE_NOT_FOUND;
+		return nullptr;
+	}
 	// attempt to open as file
 	if (HAS_FLAG(accessFlags, FSC_ACCESS_FLAG::OPEN_FILE))
 	{
@@ -204,18 +221,24 @@ class fscDeviceAndroidSAFFSC : public fscDeviceC
 
 	bool fscDeviceCreateDir(std::string_view path, void* ctx, sint32* fscStatus) override
 	{
-		throw std::runtime_error("creating a directory is not supported with SAF");
+		// Read-only mount; report failure rather than throwing (see OpenFile).
+		cemuLog_logOnce(LogType::Force, "AndroidSAF: createDir not supported on read-only mount");
+		*fscStatus = FSC_STATUS_FILE_NOT_FOUND;
+		return false;
 	}
 
 	bool fscDeviceRemoveFileOrDir(std::string_view path, void* ctx, sint32* fscStatus) override
-	{		
-		throw std::runtime_error("removing a file or dir is not supported with SAF");
-        return false;
+	{
+		cemuLog_logOnce(LogType::Force, "AndroidSAF: removeFileOrDir not supported on read-only mount");
+		*fscStatus = FSC_STATUS_FILE_NOT_FOUND;
+		return false;
 	}
 
 	bool fscDeviceRename(std::string_view srcPath, std::string_view dstPath, void* ctx, sint32* fscStatus) override
 	{
-		throw std::runtime_error("renaming not supported with SAF");
+		cemuLog_logOnce(LogType::Force, "AndroidSAF: rename not supported on read-only mount");
+		*fscStatus = FSC_STATUS_FILE_NOT_FOUND;
+		return false;
 	}
 
 	// singleton
