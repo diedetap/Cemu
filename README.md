@@ -15,7 +15,12 @@ This fork just adds bug fixes on top of all three.
 - **Dual-screen stability**: the bottom screen no longer freezes when the side menu opens, the device suspends, or you switch apps. The `Presentation` is now tied to the Activity lifecycle (`repeatOnLifecycle(RESUMED)` + `setOnDismissListener` restart), and a stale `ANativeWindow` refcount leak in the surface swap path is gone.
 - **Synced with upstream**: merged ~107 commits from [SSimco/Cemu](https://github.com/SSimco/Cemu)'s `main` to pick up recent stability and compat work.
 - **Paper Mario: Color Splash now boots**: shipped a default game profile to force single-core recompiler, and — more importantly — fixed a Cemu Android bug where the SAF filesystem backend would `throw` (and then `abort()` the process) on any write/create attempt instead of returning a clean error. This wasn't Color Splash specific; any title that pokes at write paths on a read-only SAF mount benefits.
+- **Adreno linear-filter fallback (v0.2)**: when a texture format doesn't expose `VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT` (e.g. `R32_SFLOAT` on Adreno), the Vulkan sampler is downgraded from `LINEAR` to `NEAREST` per-draw instead of producing the undefined-behavior zero-sample Adreno returns. Spec-compliance fix that helps any title sampling float buffers.
 - **Minor Vulkan fix**: missing `break;` in `VulkanRenderer::GetTextureFormatInfoVK` for the `X24_G8_UINT` texture format (used by Color Splash, Resident Evil) — could matter on stricter drivers like Adreno.
+
+## Known limitations
+
+- **Paper Mario: Color Splash on Adreno** still has a character-rendering artifact during the paper-cutout wave animation (characters render as solid-black silhouettes / travelling black bars). The same dump works correctly on Steam Deck (RADV); current evidence points at Cemu's SPIR-V shader generator emitting more vertex output locations than Adreno's `maxVertexOutputLocations` allows. Fixing it properly requires upstream Cemu shader-gen changes. The game still boots and is playable — the artifact is cosmetic.
 
 ## APK
 
