@@ -2,6 +2,22 @@
 
 Small patch set on top of [SapphireRhodonite/Cemu](https://github.com/SapphireRhodonite/Cemu)'s dual-screen Android build, focused on stability on the [Ayn Thor](https://www.ayntec.com/products/ayn-thor) (and any other Android device with a real secondary `Display`). Nothing in this fork is original emulator work — all credit for that goes to the projects below.
 
+> ## ⚠️ Required on Ayn Thor: install the Turnip GPU driver
+>
+> The Ayn Thor ships with a 2023-vintage Qualcomm Adreno driver that **does not correctly render several Wii U titles** — most visibly, Paper Mario: Color Splash characters render as solid-black silhouettes with travelling black bars during the paper-cutout wave animation. The same dump works perfectly on Steam Deck, so this is a stock-Adreno-driver bug.
+>
+> Replacing the stock driver with **Mesa Turnip** via Cemu's built-in Custom Drivers loader fixes Color Splash (confirmed) and likely several other Adreno-specific glitches.
+>
+> **Recommended:** [Turnip v26.0.0 R7](https://github.com/K11MCH1/AdrenoToolsDrivers/releases/tag/v26.0.0-rc07) — direct link: [`Turnip_v26.0.0_R7.zip`](https://github.com/K11MCH1/AdrenoToolsDrivers/releases/download/v26.0.0-rc07/Turnip_v26.0.0_R7.zip). Driver collection lives at [K11MCH1/AdrenoToolsDrivers](https://github.com/K11MCH1/AdrenoToolsDrivers).
+>
+> **Install procedure:**
+> 1. Download the `.zip` to your device (do **not** unzip).
+> 2. In Cemu: **Settings → Custom Drivers → +** → pick the `.zip`.
+> 3. Tap the new "Mesa Turnip driver v26.0.0 - R7" entry to select it.
+> 4. Force-stop and relaunch Cemu.
+>
+> Avoid the Qualcomm `v840`/`v837` drivers from the same repo — they're extracted from Android 15 devices and Cemu's installer will reject them with "failed to install driver" because their `minApi` is higher than the Thor's Android 13 (API 33). Turnip targets API 27+ so it installs cleanly.
+
 ## Acknowledgements
 
 - **[Cemu](https://github.com/cemu-project/Cemu)** by the Cemu team — the Wii U emulator this is built on.
@@ -18,15 +34,11 @@ This fork just adds bug fixes on top of all three.
 - **Adreno linear-filter fallback (v0.2)**: when a texture format doesn't expose `VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT` (e.g. `R32_SFLOAT` on Adreno), the Vulkan sampler is downgraded from `LINEAR` to `NEAREST` per-draw instead of producing the undefined-behavior zero-sample Adreno returns. Spec-compliance fix that helps any title sampling float buffers.
 - **Minor Vulkan fix**: missing `break;` in `VulkanRenderer::GetTextureFormatInfoVK` for the `X24_G8_UINT` texture format (used by Color Splash, Resident Evil) — could matter on stricter drivers like Adreno.
 
-## Known limitations
-
-- **Paper Mario: Color Splash on Adreno** still has a character-rendering artifact during the paper-cutout wave animation (characters render as solid-black silhouettes / travelling black bars). The same dump works correctly on Steam Deck (RADV); current evidence points at Cemu's SPIR-V shader generator emitting more vertex output locations than Adreno's `maxVertexOutputLocations` allows. Fixing it properly requires upstream Cemu shader-gen changes. The game still boots and is playable — the artifact is cosmetic.
-
 ## APK
 
 A prebuilt arm64-v8a release APK is on the [Releases](../../releases) page. It's signed with a debug keystore (no upstream-Cemu signature match), so if you already have a Cemu install, uninstall it first or use `adb install -r`.
 
-Target device: **Ayn Thor** (Snapdragon 8 Gen 2, Adreno 740, Android 13). Should also work on any other Android handheld / foldable whose second screen is exposed as a separate `Display` via `DisplayManager`.
+Target device: **Ayn Thor** (Snapdragon 8 Gen 2, Adreno 740, Android 13). Should also work on any other Android handheld / foldable whose second screen is exposed as a separate `Display` via `DisplayManager`. **Install the Turnip driver (see top of this README) before reporting graphics bugs on Adreno hardware** — most of them are caused by the stock Qualcomm driver, not by Cemu.
 
 ## Honest disclaimer
 
