@@ -740,6 +740,32 @@ VkDescriptorSetInfo* VulkanRenderer::draw_getOrCreateDescriptorSet(PipelineInfo*
 			auto filterMag = samplerWords->WORD0.get_XY_MAG_FILTER();
 			samplerInfo.magFilter = (filterMag == Latte::LATTE_SQ_TEX_SAMPLER_WORD0_0::E_XY_FILTER::POINT || filterMin == Latte::LATTE_SQ_TEX_SAMPLER_WORD0_0::E_XY_FILTER::ANISO_POINT) ? VK_FILTER_NEAREST : VK_FILTER_LINEAR;
 
+			// Downgrade LINEAR -> NEAREST when the texture's format doesn't expose
+			// VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT. Adreno (Snapdragon)
+			// doesn't expose this bit for R32_SFLOAT and most pure-float formats,
+			// and Vulkan says the sampled result is undefined in that case. In
+			// practice Adreno returns zero, which surfaces as solid-black bars
+			// over animated characters in titles like Paper Mario: Color Splash.
+			// RADV / desktop NVIDIA happen to filter these formats correctly, so
+			// the same shader works there.
+			if (samplerInfo.magFilter == VK_FILTER_LINEAR || samplerInfo.minFilter == VK_FILTER_LINEAR ||
+			    samplerInfo.mipmapMode == VK_SAMPLER_MIPMAP_MODE_LINEAR)
+			{
+				VkFormat texFormat = ((LatteTextureVk*)baseTexture)->GetFormat();
+				VkFormatProperties fmtProp{};
+				vkGetPhysicalDeviceFormatProperties(this->m_physicalDevice, texFormat, &fmtProp);
+				if ((fmtProp.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT) == 0)
+				{
+					cemuLog_logOnce(LogType::Force,
+						"AdrenoFilterFix: format {} lacks LINEAR filtering, downgrading sampler to NEAREST",
+						(uint32)texFormat);
+					samplerInfo.magFilter = VK_FILTER_NEAREST;
+					samplerInfo.minFilter = VK_FILTER_NEAREST;
+					if (samplerInfo.mipmapMode == VK_SAMPLER_MIPMAP_MODE_LINEAR)
+						samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+				}
+			}
+
 			auto filterZ = samplerWords->WORD0.get_Z_FILTER();
 			// todo: z-filter for texture array samplers is customizable for GPU7 but OpenGL/Vulkan doesn't expose this functionality?
 
