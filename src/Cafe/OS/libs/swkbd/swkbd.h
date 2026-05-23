@@ -1,7 +1,11 @@
 #pragma once
 
+class COSModule;
+
 namespace swkbd
 {
+	COSModule* GetModule();
+
 	constexpr uint32 BACKSPACE_KEYCODE = 8;
 	constexpr uint32 BACKWARDS_DELETE_KEYCODE = 127;
 	constexpr uint32 RETURN_KEYCODE = 13;

@@ -151,10 +151,6 @@ enum class DebuggerStepCommand : uint8
 	Run
 };
 
-}debuggerState_t;
-
-extern debuggerState_t debuggerState;
-
 // new API
 
 DebuggerBreakpoint* debugger_getFirstBP(uint32 address);

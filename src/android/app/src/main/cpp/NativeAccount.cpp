@@ -14,6 +14,7 @@
 #include "input/api/Android/AndroidController.h"
 #include "input/api/Android/AndroidControllerProvider.h"
 #include "config/ActiveSettings.h"
+#include "Cafe/Account/Account.h"
 #include "Cemu/ncrypto/ncrypto.h"
 
 extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
