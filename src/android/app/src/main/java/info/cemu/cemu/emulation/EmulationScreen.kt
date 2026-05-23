@@ -57,8 +57,12 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.MutableCreationExtras
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.awaitCancellation
 import info.cemu.cemu.R
 import info.cemu.cemu.common.android.display.DisplayUtils
 import info.cemu.cemu.common.settings.GamePadPosition
@@ -408,26 +412,49 @@ private fun EmulationSurfaces(viewModel: EmulationViewModel, isEmulationInitiali
         )
     }
 
-    DisposableEffect(activity, padDisplay, usePadPresentation, sideMenuState.isExternalScreenRotatedLeft) {
-        val activityNonNull = activity ?: return@DisposableEffect onDispose {}
-        if (!usePadPresentation) {
-            return@DisposableEffect onDispose {}
+    // Android automatically dismisses a Presentation when the host Activity is
+    // paused (screen off, recents, home). DisposableEffect alone won't re-show
+    // it because its keys don't change across pause/resume; the result is the
+    // pad surface freezing on its last frame. repeatOnLifecycle(RESUMED) ties
+    // the Presentation lifecycle to the Activity so it's recreated on resume.
+    //
+    // The setOnDismissListener handler covers a second failure mode: Android
+    // may dismiss the Presentation due to a transient focus change (observed
+    // when the side menu drawer opens) without dropping the Activity below
+    // RESUMED. Bumping restartTrigger forces the effect to restart and
+    // rebuild the Presentation immediately.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var restartTrigger by remember { mutableStateOf(0) }
+    LaunchedEffect(
+        activity,
+        padDisplay?.displayId,
+        usePadPresentation,
+        sideMenuState.isExternalScreenRotatedLeft,
+        restartTrigger,
+    ) {
+        if (!usePadPresentation) return@LaunchedEffect
+        val activityNonNull = activity ?: return@LaunchedEffect
+        val padDisplayNonNull = padDisplay ?: return@LaunchedEffect
+
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            val padPresentation = PadPresentation(
+                context = activityNonNull,
+                display = padDisplayNonNull,
+                rotateLeft = sideMenuState.isExternalScreenRotatedLeft,
+                holderCallback = viewModel.padHolderCallback,
+                touchListener = padPresentationTouchListener,
+            )
+            padPresentation.setOnDismissListener {
+                restartTrigger++
+            }
+            padPresentation.show()
+            try {
+                awaitCancellation()
+            } finally {
+                padPresentation.setOnDismissListener(null)
+                if (padPresentation.isShowing) padPresentation.dismiss()
+            }
         }
-        val padDisplayNonNull = padDisplay ?: return@DisposableEffect onDispose {}
-
-        NativeEmulation.setExternalScreenRotatedLeft(sideMenuState.isExternalScreenRotatedLeft)
-
-        val padPresentation = PadPresentation(
-            context = activityNonNull,
-            display = padDisplayNonNull,
-            rotateLeft = sideMenuState.isExternalScreenRotatedLeft,
-            holderCallback = viewModel.padHolderCallback,
-            touchListener = padPresentationTouchListener,
-        )
-
-        padPresentation.show()
-
-        onDispose { padPresentation.dismiss() }
     }
 
     LinearLayout(gamePadPosition) { itemModifier ->

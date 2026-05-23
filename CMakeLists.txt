@@ -37,7 +37,12 @@ if (ENABLE_VCPKG)
 	endif()
 
 
-	if(UNIX AND NOT APPLE AND NOT VCPKG_TARGET_ANDROID)
+	if(VCPKG_TARGET_ANDROID)
+		# Android cross-build: skip host-OS overlays (the Mac libusb overlay in
+		# particular doesn't cross-compile and isn't needed since
+		# ENABLE_NSYSHID_LIBUSB=OFF on Android).
+		set(VCPKG_OVERLAY_PORTS "${CMAKE_CURRENT_LIST_DIR}/dependencies/vcpkg_overlay_ports")
+	elseif(UNIX AND NOT APPLE)
 		set(VCPKG_OVERLAY_PORTS "${CMAKE_CURRENT_LIST_DIR}/dependencies/vcpkg_overlay_ports_linux;${CMAKE_CURRENT_LIST_DIR}/dependencies/vcpkg_overlay_ports")
 	elseif(APPLE)
 		set(VCPKG_OVERLAY_PORTS "${CMAKE_CURRENT_LIST_DIR}/dependencies/vcpkg_overlay_ports_mac;${CMAKE_CURRENT_LIST_DIR}/dependencies/vcpkg_overlay_ports")

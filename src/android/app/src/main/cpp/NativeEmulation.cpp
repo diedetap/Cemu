@@ -128,8 +128,9 @@ namespace NativeEmulation
 			m_surfaceTexture = env->NewGlobalRef(localSurfaceTexture);
 			m_surface = env->NewGlobalRef(localSurface);
 
+			// ANativeWindow_fromSurface already returns with a strong reference; an
+			// extra ANativeWindow_acquire would leak one ref on every surface swap.
 			m_window = ANativeWindow_fromSurface(*env, m_surface);
-			ANativeWindow_acquire(m_window);
 
 			env->DeleteLocalRef(localSurfaceTexture);
 			env->DeleteLocalRef(localSurface);
@@ -253,12 +254,12 @@ Java_info_cemu_cemu_nativeinterface_NativeEmulation_setSurface(JNIEnv* env, [[ma
 {
 	JNIUtils::handleNativeException(env, [&]() {
 		auto& windowHandleInfo = is_main_canvas ? WindowSystem::GetWindowInfo().canvas_main : WindowSystem::GetWindowInfo().canvas_pad;
-		auto oldWindow = windowHandleInfo.surface.load();
+		// ANativeWindow_fromSurface returns an already-owned reference; do NOT
+		// also call ANativeWindow_acquire or we leak a ref on every surface swap.
+		auto newSurface = ANativeWindow_fromSurface(env, surface);
+		auto oldWindow = windowHandleInfo.surface.exchange(newSurface);
 		if (oldWindow != nullptr)
 			ANativeWindow_release(static_cast<ANativeWindow*>(oldWindow));
-		auto newSurface = ANativeWindow_fromSurface(env, surface);
-		ANativeWindow_acquire(newSurface);
-		windowHandleInfo.surface = newSurface;
 		windowHandleInfo.surface.notify_all();
 	});
 }

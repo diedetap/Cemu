@@ -816,6 +816,10 @@ SwapchainInfoVk& VulkanRenderer::GetChainInfo(bool mainWindow) const
 
 void VulkanRenderer::StopUsingPadAndWait()
 {
+	// Nothing to tear down. Skipping also avoids a deadlock if the latte
+	// thread has already exited or never produced a pad swapchain.
+	if (!m_padSwapchainInfo)
+		return;
 	m_destroyPadSwapchainNextAcquire.test_and_set();
 	m_destroyPadSwapchainNextAcquire.wait(true);
 }
@@ -2865,6 +2869,11 @@ bool VulkanRenderer::AcquireNextSwapchainImage(bool mainWindow)
 	if(!mainWindow && m_destroyPadSwapchainNextAcquire.test())
 	{
 		RecreateSwapchain(mainWindow, true);
+		// Drop the swapchain object entirely so IsSwapchainInfoValid(false) returns
+		// false until InitializeSurface(...) rebuilds it. Without this, the latte
+		// thread could keep calling AcquireImage on a torn-down swapchain whose
+		// SwapchainInfoVk::IsValid() contract may not guarantee post-Cleanup falsity.
+		m_padSwapchainInfo.reset();
 		m_destroyPadSwapchainNextAcquire.clear();
 		m_destroyPadSwapchainNextAcquire.notify_all();
 		return false;
